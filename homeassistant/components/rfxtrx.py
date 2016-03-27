@@ -1,7 +1,5 @@
 """
-homeassistant.components.rfxtrx
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides support for RFXtrx components.
+Support for RFXtrx components.
 
 For more details about this component, please refer to the documentation at
 https://home-assistant.io/components/rfxtrx/
@@ -9,9 +7,9 @@ https://home-assistant.io/components/rfxtrx/
 import logging
 
 from homeassistant.util import slugify
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 
-REQUIREMENTS = ['https://github.com/Danielhiversen/pyRFXtrx/archive/0.4.zip' +
-                '#pyRFXtrx==0.4']
+REQUIREMENTS = ['pyRFXtrx==0.6.5']
 
 DOMAIN = "rfxtrx"
 
@@ -22,6 +20,7 @@ ATTR_NAME = 'name'
 ATTR_PACKETID = 'packetid'
 ATTR_FIREEVENT = 'fire_event'
 ATTR_DATA_TYPE = 'data_type'
+ATTR_DUMMY = "dummy"
 
 EVENT_BUTTON_PRESSED = 'button_pressed'
 
@@ -32,12 +31,10 @@ RFXOBJECT = None
 
 
 def setup(hass, config):
-    """ Setup the RFXtrx component. """
-
+    """Setup the RFXtrx component."""
     # Declare the Handle event
     def handle_receive(event):
-        """ Callback all subscribers for RFXtrx gateway. """
-
+        """Callback all subscribers for RFXtrx gateway."""
         # Log RFXCOM event
         if not event.device.id_string:
             return
@@ -47,33 +44,43 @@ def setup(hass, config):
         _LOGGER.info("Receive RFXCOM event from %s => %s",
                      event.device, entity_name)
 
-        # Callback to HA registered components
+        # Callback to HA registered components.
         for subscriber in RECEIVED_EVT_SUBSCRIBERS:
             subscriber(event)
 
-    # Try to load the RFXtrx module
+    # Try to load the RFXtrx module.
     import RFXtrx as rfxtrxmod
 
-    # Init the rfxtrx module
+    # Init the rfxtrx module.
     global RFXOBJECT
 
     if ATTR_DEVICE not in config[DOMAIN]:
-        _LOGGER.exception(
-            "can found device parameter in %s YAML configuration section",
+        _LOGGER.error(
+            "can not find device parameter in %s YAML configuration section",
             DOMAIN
         )
         return False
 
     device = config[DOMAIN][ATTR_DEVICE]
     debug = config[DOMAIN].get(ATTR_DEBUG, False)
+    dummy_connection = config[DOMAIN].get(ATTR_DUMMY, False)
 
-    RFXOBJECT = rfxtrxmod.Core(device, handle_receive, debug=debug)
+    if dummy_connection:
+        RFXOBJECT =\
+            rfxtrxmod.Core(device, handle_receive, debug=debug,
+                           transport_protocol=rfxtrxmod.DummyTransport2)
+    else:
+        RFXOBJECT = rfxtrxmod.Core(device, handle_receive, debug=debug)
+
+    def _shutdown_rfxtrx(event):
+        RFXOBJECT.close_connection()
+    hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, _shutdown_rfxtrx)
 
     return True
 
 
 def get_rfx_object(packetid):
-    """ Return the RFXObject with the packetid. """
+    """Return the RFXObject with the packetid."""
     import RFXtrx as rfxtrxmod
 
     binarypacket = bytearray.fromhex(packetid)
