@@ -1,6 +1,7 @@
 """The testd for Core components."""
 # pylint: disable=protected-access,too-many-public-methods
 import asyncio
+import time
 import unittest
 from unittest.mock import patch, Mock
 
@@ -144,6 +145,8 @@ class TestComponentsCore(unittest.TestCase):
         }
         with patch_yaml_files(files, True):
             comps.reload_core_config(self.hass)
+            # ensure main thread drops off execution when service is called
+            time.sleep(0)
             self.hass.block_till_done()
 
         assert mock_error.called
