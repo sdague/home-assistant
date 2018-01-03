@@ -4,6 +4,7 @@ Support for WUnderground weather service.
 For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/sensor.wunderground/
 """
+import asyncio
 from datetime import timedelta
 import json
 import logging
@@ -13,6 +14,7 @@ import requests
 import voluptuous as vol
 
 from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.core import callback
 from homeassistant.const import (
     CONF_USERNAME, CONF_PASSWORD, TEMP_FAHRENHEIT
     )
@@ -20,7 +22,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 import homeassistant.helpers.config_validation as cv
 
-import websocket
+import websockets
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +54,8 @@ SENSORS = [
     WFSensorConfig("Humidity", "tstatrelativehumidity", "mdi:water-percent", "%"),
 ]
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
+@asyncio.coroutine
+def async_setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the WUnderground sensor."""
 
     username = config.get(CONF_USERNAME)
@@ -61,15 +64,12 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 
     rest = WaterFurnaceData(
         hass, username, password, unit)
-    rest.login()
-
+    yield from rest.login()
     sensors = []
     for config in SENSORS:
         sensors.append(WaterFurnaceSensor(rest, config))
 
-    rest.update()
-    if not rest.data:
-        raise PlatformNotReady
+    yield from rest.async_update()
 
     add_devices(sensors)
     return True
@@ -186,9 +186,10 @@ class WaterFurnaceSensor(Entity):
         """Return the units of measurement."""
         return self._unit_of_measurement
 
-    def update(self):
+    @asyncio.coroutine
+    def async_update(self):
         """Update current conditions."""
-        self.rest.update()
+        self.rest.async_update()
 
         if not self.rest.data:
             # no data, return
@@ -214,18 +215,22 @@ class WaterFurnaceData(object):
                             allow_redirects=False)
         self.sessionid = res.cookies["sessionid"]
 
+    @asyncio.coroutine
     def _login_ws(self):
-        self.ws = websocket.create_connection(
+        self.ws = yield from websockets.connect(
             "wss://awlclientproxy.mywaterfurnace.com/")
         login = {"cmd": "login", "tid": 2, "source": "consumer dashboard",
                  "sessionid": self.sessionid}
-        self.ws.send(json.dumps(login))
-        data = self.ws.recv()
+        yield from self.ws.send(json.dumps(login))
+        data = yield from self.ws.recv()
 
+    @asyncio.coroutine
     def login(self):
-        self._get_session_id()
-        self._login_ws()
+        from homeassistant.util.async import run_callback_threadsafe
+        yield from run_callback_threadsafe(self.hass.loop, self._get_session_id, self)
+        yield from self._login_ws()
 
+    @asyncio.coroutine
     def read(self):
         req = {
             "cmd": "read",
@@ -246,22 +251,24 @@ class WaterFurnaceData(object):
                       "TStatHeatingSetpoint","TStatCoolingSetpoint",
                       "AWLTStatType"],
             "source":"consumer dashboard"}
-        self.ws.send(json.dumps(req))
-        data = self.ws.recv()
+        yield from self.ws.send(json.dumps(req))
+        data = yield from self.ws.recv()
         datadecoded = json.loads(data)
         self.data = FurnaceReading(datadecoded)
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    def update(self):
+    @callback
+    def async_update(self):
         """Get the latest data from Symphony websocket."""
         try:
-            self.read()
+            # self.login()
+            yield from self.read()
             return True
         except ConnectionError as err:
-            self.login()
+            yield from self.login()
             _LOGGER.error("Lost our connection, trying again")
             self.data = None
         except requests.RequestException as err:
-            self.login()
+            yield from self.login()
             _LOGGER.error("Error fetching Waterfurnace data: %s", repr(err))
             self.data = None
