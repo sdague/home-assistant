@@ -14,9 +14,8 @@ import voluptuous as vol
 
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
-    CONF_USERNAME, CONF_PASSWORD
+    CONF_USERNAME, CONF_PASSWORD, TEMP_FAHRENHEIT
     )
-from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 import homeassistant.helpers.config_validation as cv
@@ -35,8 +34,20 @@ WF_LOGIN_URL = 'https://symphony.mywaterfurnace.com/account/login'
 class WFSensorConfig(object):
     """Water Furnace Sensor configuration."""
 
-SENSORS = [
+    def __init__(self, friendly_name, field, icon="mdi:guage",
+                 unit_of_measurement=None):
+        self.friendly_name = friendly_name
+        self.field = field
+        self.icon = icon
+        self.unit_of_measurement = unit_of_measurement
 
+SENSORS = [
+    WFSensorConfig("Furnace Mode", "mode"),
+    WFSensorConfig("Total Power", "totalunitpower", "mdi:flash", "W"),
+    WFSensorConfig("Active Setpoint", "tstatactivesetpoint", "mdi:thermomenter", TEMP_FAHRENHEIT),
+    WFSensorConfig("Leaving Air", "leavingairtemp", "mdi:thermomenter", TEMP_FAHRENHEIT),
+    WFSensorConfig("Room Temp", "tstatroomtemp", "mdi:thermomenter", TEMP_FAHRENHEIT),
+    WFSensorConfig("Loop Temp", "enteringwatertemp", "mdi:thermomenter", TEMP_FAHRENHEIT),
 ]
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
@@ -48,10 +59,11 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 
     rest = WaterFurnaceData(
         hass, username, password, unit)
+    rest.login()
+
     sensors = []
-    sensors.append(WaterFurnaceSensor(rest, "mode"))
-    sensors.append(WaterFurnaceSensor(rest, "totalunitpower", "W"))
-    sensors.append(WaterFurnaceSensor(rest, "tstatactivesetpoint", "F"))
+    for config in SENSORS:
+        sensors.append(WaterFurnaceSensor(rest, config))
 
     rest.update()
     if not rest.data:
@@ -81,32 +93,32 @@ class FurnaceReading(object):
         self.tid = data.get('tid', 0)
 
         # power (Watts)
-        self.compressorpower = data.get('compressorpower', 0)
-        self.fanpower = data.get('fanpower', 0)
-        self.auxpower = data.get('auxpower', 0)
-        self.looppumppower = data.get('looppumppower', 0)
-        self.totalunitpower = data.get('totalunitpower', 0)
+        self.compressorpower = data.get('compressorpower')
+        self.fanpower = data.get('fanpower')
+        self.auxpower = data.get('auxpower')
+        self.looppumppower = data.get('looppumppower')
+        self.totalunitpower = data.get('totalunitpower')
 
         # modes (0 - 10)
-        self.modeofoperation = data.get('modeofoperation', 0)
+        self.modeofoperation = data.get('modeofoperation')
 
         # fan speed (0 - 10)
-        self.airflowcurrentspeed = data.get('airflowcurrentspeed', 0)
+        self.airflowcurrentspeed = data.get('airflowcurrentspeed')
 
         # humidity (%)
-        self.tstatdehumidsetpoint = data.get('tstatdehumidsetpoint', 0)
-        self.tstathumidsetpoint = data.get('tstathumidsetpoint', 0)
-        self.tstatrelativehumidity = data.get('tstatrelativehumidity', 0)
+        self.tstatdehumidsetpoint = data.get('tstatdehumidsetpoint')
+        self.tstathumidsetpoint = data.get('tstathumidsetpoint')
+        self.tstatrelativehumidity = data.get('tstatrelativehumidity')
 
         # temps (degrees F)
-        self.leavingairtemp = data.get('leavingairtemp', 0)
-        self.tstatroomtemp = data.get('tstatroomtemp', 0)
-        self.enteringwatertemp = data.get('enteringwatertemp', 0)
+        self.leavingairtemp = data.get('leavingairtemp')
+        self.tstatroomtemp = data.get('tstatroomtemp')
+        self.enteringwatertemp = data.get('enteringwatertemp')
 
         # setpoints (degrees F)
-        self.tstatheatingsetpoint = data.get('tstatheatingsetpoint', 0)
-        self.tstatcoolingsetpoint = data.get('tstatcoolingsetpoint', 0)
-        self.tstatactivesetpoint = data.get('tstatactivesetpoint', 0)
+        self.tstatheatingsetpoint = data.get('tstatheatingsetpoint')
+        self.tstatcoolingsetpoint = data.get('tstatcoolingsetpoint')
+        self.tstatactivesetpoint = data.get('tstatactivesetpoint')
 
     @property
     def mode(self):
@@ -126,20 +138,26 @@ class FurnaceReading(object):
 class WaterFurnaceSensor(Entity):
     """Implementing the WUnderground sensor."""
 
-    def __init__(self, rest, attr, unit=None):
+    def __init__(self, rest, config):
         """Initialize the sensor."""
         self.rest = rest
-        self._attr = attr
+        self._name = config.friendly_name
+        self._attr = config.field
         self._state = None
-        self._icon = None
+        self._icon = config.icon
         self._entity_picture = None
         self._attributes = {}
-        self._unit_of_measurement = unit
+        self._unit_of_measurement = config.unit_of_measurement
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return "WF_" + self._attr
+        return self._name
+
+    @property
+    def entity_id(self):
+        """Return the entity id."""
+        return "sensor.wf_" + self._attr
 
     @property
     def state(self):
@@ -186,7 +204,6 @@ class WaterFurnaceData(object):
         self._unit = unit
         self.data = None
         self.session_id = None
-        self.login()
 
     def _get_session_id(self):
         data = dict(emailaddress=self._user, password=self._passwd, op="login")
@@ -236,7 +253,6 @@ class WaterFurnaceData(object):
     def update(self):
         """Get the latest data from Symphony websocket."""
         try:
-            # self.login()
             self.read()
             return True
         except ConnectionError as err:
