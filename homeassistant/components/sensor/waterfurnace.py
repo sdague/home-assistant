@@ -44,10 +44,10 @@ class WFSensorConfig(object):
 SENSORS = [
     WFSensorConfig("Furnace Mode", "mode"),
     WFSensorConfig("Total Power", "totalunitpower", "mdi:flash", "W"),
-    WFSensorConfig("Active Setpoint", "tstatactivesetpoint", "mdi:thermomenter", TEMP_FAHRENHEIT),
-    WFSensorConfig("Leaving Air", "leavingairtemp", "mdi:thermomenter", TEMP_FAHRENHEIT),
-    WFSensorConfig("Room Temp", "tstatroomtemp", "mdi:thermomenter", TEMP_FAHRENHEIT),
-    WFSensorConfig("Loop Temp", "enteringwatertemp", "mdi:thermomenter", TEMP_FAHRENHEIT),
+    WFSensorConfig("Active Setpoint", "tstatactivesetpoint", "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Leaving Air", "leavingairtemp", "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Room Temp", "tstatroomtemp", "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Loop Temp", "enteringwatertemp", "mdi:thermometer", TEMP_FAHRENHEIT),
 ]
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
