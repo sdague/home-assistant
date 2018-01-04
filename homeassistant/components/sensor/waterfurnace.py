@@ -48,6 +48,8 @@ SENSORS = [
     WFSensorConfig("Leaving Air", "leavingairtemp", "mdi:thermometer", TEMP_FAHRENHEIT),
     WFSensorConfig("Room Temp", "tstatroomtemp", "mdi:thermometer", TEMP_FAHRENHEIT),
     WFSensorConfig("Loop Temp", "enteringwatertemp", "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Humidity Set Point", "tstathumidsetpoint", "mdi:water-percent", "%"),
+    WFSensorConfig("Humidity", "tstatrelativehumidity", "mdi:water-percent", "%"),
 ]
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
