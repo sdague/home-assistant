@@ -1,8 +1,8 @@
 """
-Support for WUnderground weather service.
+Support for Waterfurnace
 
 For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/sensor.wunderground/
+https://home-assistant.io/components/sensor.waterfurnace/
 """
 import asyncio
 from datetime import timedelta
@@ -189,7 +189,12 @@ class WaterFurnaceSensor(Entity):
     @asyncio.coroutine
     def async_update(self):
         """Update current conditions."""
-        self.rest.async_update()
+        try:
+            yield from self.rest.async_update()
+        except TypeError:
+            # If this returns None due to time blocking, it's fine,
+            # just move on.
+            pass
 
         if not self.rest.data:
             # no data, return
@@ -201,7 +206,7 @@ class WaterFurnaceSensor(Entity):
 class WaterFurnaceData(object):
     def __init__(self, hass, user, passwd, unit):
         """Initialize the data object."""
-        self._hass = hass
+        self.hass = hass
         self._user = user
         self._passwd = passwd
         self._unit = unit
@@ -226,8 +231,7 @@ class WaterFurnaceData(object):
 
     @asyncio.coroutine
     def login(self):
-        from homeassistant.util.async import run_callback_threadsafe
-        yield from run_callback_threadsafe(self.hass.loop, self._get_session_id, self)
+        yield from self.hass.async_add_job(self._get_session_id)
         yield from self._login_ws()
 
     @asyncio.coroutine
@@ -257,13 +261,12 @@ class WaterFurnaceData(object):
         self.data = FurnaceReading(datadecoded)
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    @callback
+    @asyncio.coroutine
     def async_update(self):
         """Get the latest data from Symphony websocket."""
         try:
             # self.login()
             yield from self.read()
-            return True
         except ConnectionError as err:
             yield from self.login()
             _LOGGER.error("Lost our connection, trying again")
