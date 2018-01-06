@@ -1,5 +1,6 @@
 """Support for MyChevy sensors."""
 
+import asyncio
 from logging import getLogger
 from datetime import datetime as dt
 from datetime import timedelta
@@ -52,6 +53,7 @@ class EVBinarySensor(BinarySensorDevice):
         self._name = config.name
         self._attr = config.attr
         self._type = config.device_class
+        self._is_on = None
 
         self.entity_id = ENTITY_ID_FORMAT.format(
             '{}_{}'.format(DOMAIN, slugify(self._name)))
@@ -64,16 +66,9 @@ class EVBinarySensor(BinarySensorDevice):
     @property
     def is_on(self):
         """Return if on."""
-        if self.car is not None:
-            return getattr(self.car, self._attr, None)
+        return self._is_on
 
-    @property
-    def hidden(self):
-        if self.car == None:
-            return True
-        return False
-
-    @property
-    def should_poll(self):
-        """Return the polling state."""
-        return False
+    @asyncio.coroutine
+    def async_update(self):
+        self.hass.async_add_job(self._conn.safe_update)
+        self._is_on = self._conn.get(self._attr)

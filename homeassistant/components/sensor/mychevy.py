@@ -1,5 +1,6 @@
 """Support for MyChevy sensors."""
 
+import asyncio
 from logging import getLogger
 from datetime import datetime as dt
 from datetime import timedelta
@@ -107,6 +108,7 @@ class EVSensor(Entity):
         self._attr = config.attr
         self._unit_of_measurement = config.unit_of_measurement
         self._icon = config.icon
+        self._state = None
 
         self.entity_id = ENTITY_ID_FORMAT.format(
             '{}_{}'.format(DOMAIN, slugify(self._name)))
@@ -124,21 +126,14 @@ class EVSensor(Entity):
     @property
     def state(self):
         """Return the state."""
-        if self.car is not None:
-            return getattr(self.car, self._attr, None)
+        return self._state
 
     @property
     def unit_of_measurement(self):
         """Return the unit of measurement the state is expressed in."""
         return self._unit_of_measurement
 
-    @property
-    def hidden(self):
-        if self.state == None:
-            return True
-        return False
-
-    @property
-    def should_poll(self):
-        """Return the polling state."""
-        return False
+    @asyncio.coroutine
+    def async_update(self):
+        self.hass.async_add_job(self._conn.safe_update)
+        self._state = self._conn.get(self._attr)

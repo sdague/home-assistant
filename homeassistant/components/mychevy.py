@@ -4,6 +4,7 @@ Support for Chevy Bolt EV sensors.
 For more details about this platform, please refer to the documentation at
 """
 
+import asyncio
 from logging import getLogger
 from datetime import datetime as dt
 from datetime import timedelta
@@ -57,7 +58,8 @@ class EVBinarySensorConfig(object):
         self.device_class = device_class
 
 
-def setup(hass, base_config):
+@asyncio.coroutine
+def async_setup(hass, base_config):
     """Setup mychevy platform."""
     import mychevy.mychevy as mc
 
@@ -68,10 +70,10 @@ def setup(hass, base_config):
     password = config.get(CONF_PASSWORD)
     if hass.data.get(DOMAIN) is None:
         hass.data[DOMAIN] = MyChevyHub(mc.MyChevy(email, password), hass)
-        hass.data[DOMAIN].start()
 
     discovery.load_platform(hass, 'sensor', DOMAIN, {}, config)
     discovery.load_platform(hass, 'binary_sensor', DOMAIN, {}, config)
+    hass.async_add_job(hass.data[DOMAIN].safe_update)
 
     return True
 
@@ -113,9 +115,9 @@ class MyChevyHub(threading.Thread):
 
         """
         self._car = data
-        for sensor in self.sensors:
-            sensor.car = data
-            sensor.schedule_update_ha_state()
+        # for sensor in self.sensors:
+        #     sensor.car = data
+        #     sensor.schedule_update_ha_state()
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -127,6 +129,20 @@ class MyChevyHub(threading.Thread):
         """
         self.car = self._client.data()
         self.status.success()
+
+    def safe_update(self):
+        try:
+            self.update()
+        except Exception:
+            _LOGGER.exception(
+                "Error updating mychevy data. "
+                "This probably means the OnStar link is down again")
+            self.status.error()
+
+    def get(self, attr, default=None):
+        if self.car is not None:
+            return getattr(self.car, attr, default)
+        return None
 
     def run(self):
         """Thread run loop."""
