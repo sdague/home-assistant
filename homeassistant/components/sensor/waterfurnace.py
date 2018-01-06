@@ -22,7 +22,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 import homeassistant.helpers.config_validation as cv
 
-import websockets
+REQUIREMENTS = ["websockets==4.0.1"]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ SENSORS = [
 @asyncio.coroutine
 def async_setup_platform(hass, config, add_devices, discovery_info=None):
     """Set up the WUnderground sensor."""
+
+    import websockets
 
     username = config.get(CONF_USERNAME)
     password = config.get(CONF_PASSWORD)
