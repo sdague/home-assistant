@@ -1,5 +1,5 @@
 """
-Support for Waterfurnace
+Support for Waterfurnace.
 
 For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/sensor.waterfurnace/
@@ -9,18 +9,13 @@ from datetime import timedelta
 import json
 import logging
 
-import re
 import requests
-import voluptuous as vol
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA
-from homeassistant.core import callback
 from homeassistant.const import (
     CONF_USERNAME, CONF_PASSWORD, TEMP_FAHRENHEIT
-    )
+)
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
-import homeassistant.helpers.config_validation as cv
 
 REQUIREMENTS = ["websockets==4.0.1"]
 
@@ -28,38 +23,46 @@ _LOGGER = logging.getLogger(__name__)
 
 MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=5)
 SCAN_INTERVAL = timedelta(seconds=10)
-USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_4) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/42.0.2311.90 Safari/537.36")
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_4) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/42.0.2311.90 Safari/537.36")
 WF_LOGIN_URL = 'https://symphony.mywaterfurnace.com/account/login'
+
 
 class WFSensorConfig(object):
     """Water Furnace Sensor configuration."""
 
     def __init__(self, friendly_name, field, icon="mdi:guage",
                  unit_of_measurement=None):
+        """Initialize configuration."""
         self.friendly_name = friendly_name
         self.field = field
         self.icon = icon
         self.unit_of_measurement = unit_of_measurement
 
+
 SENSORS = [
     WFSensorConfig("Furnace Mode", "mode"),
     WFSensorConfig("Total Power", "totalunitpower", "mdi:flash", "W"),
-    WFSensorConfig("Active Setpoint", "tstatactivesetpoint", "mdi:thermometer", TEMP_FAHRENHEIT),
-    WFSensorConfig("Leaving Air", "leavingairtemp", "mdi:thermometer", TEMP_FAHRENHEIT),
-    WFSensorConfig("Room Temp", "tstatroomtemp", "mdi:thermometer", TEMP_FAHRENHEIT),
-    WFSensorConfig("Loop Temp", "enteringwatertemp", "mdi:thermometer", TEMP_FAHRENHEIT),
-    WFSensorConfig("Humidity Set Point", "tstathumidsetpoint", "mdi:water-percent", "%"),
-    WFSensorConfig("Humidity", "tstatrelativehumidity", "mdi:water-percent", "%"),
+    WFSensorConfig("Active Setpoint", "tstatactivesetpoint",
+                   "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Leaving Air", "leavingairtemp",
+                   "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Room Temp", "tstatroomtemp",
+                   "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Loop Temp", "enteringwatertemp",
+                   "mdi:thermometer", TEMP_FAHRENHEIT),
+    WFSensorConfig("Humidity Set Point", "tstathumidsetpoint",
+                   "mdi:water-percent", "%"),
+    WFSensorConfig("Humidity", "tstatrelativehumidity",
+                   "mdi:water-percent", "%"),
 ]
+
 
 @asyncio.coroutine
 def async_setup_platform(hass, config, add_devices, discovery_info=None):
-    """Set up the WUnderground sensor."""
-
-    import websockets
-
+    """Set up the Waterfurnace sensor."""
     username = config.get(CONF_USERNAME)
     password = config.get(CONF_PASSWORD)
     unit = config.get("unit")
@@ -76,6 +79,7 @@ def async_setup_platform(hass, config, add_devices, discovery_info=None):
     add_devices(sensors)
     return True
 
+
 FURNACE_MODE = (
     'Standby',
     'Fan Only',
@@ -88,9 +92,12 @@ FURNACE_MODE = (
     'Aux Heat',
     'Lockout')
 
+
 class FurnaceReading(object):
+    """Representation of a furnace reading for easier access."""
 
     def __init__(self, data={}):
+        """Build a furnace reading."""
         self.zone = data.get('zone', 0)
         self.err = data.get('err', '')
         self.awlid = data.get('awlid', '')
@@ -126,9 +133,11 @@ class FurnaceReading(object):
 
     @property
     def mode(self):
+        """Property for furnace mode in something non numeric."""
         return FURNACE_MODE[self.modeofoperation]
 
     def __str__(self):
+        """Return representation."""
         return ("<FurnaceReading power=%d, mode=%s, looptemp=%.1f, "
                 "airtemp=%.1f, roomtemp=%.1f, setpoint=%d>" % (
                     self.totalunitpower,
@@ -140,7 +149,7 @@ class FurnaceReading(object):
 
 
 class WaterFurnaceSensor(Entity):
-    """Implementing the WUnderground sensor."""
+    """Implementing the Waterfurnace sensor."""
 
     def __init__(self, rest, config):
         """Initialize the sensor."""
@@ -206,6 +215,8 @@ class WaterFurnaceSensor(Entity):
 
 
 class WaterFurnaceData(object):
+    """Connector to Waterfurnace websocket."""
+
     def __init__(self, hass, user, passwd, unit):
         """Initialize the data object."""
         self.hass = hass
@@ -224,20 +235,23 @@ class WaterFurnaceData(object):
 
     @asyncio.coroutine
     def _login_ws(self):
+        import websockets
         self.ws = yield from websockets.connect(
             "wss://awlclientproxy.mywaterfurnace.com/")
         login = {"cmd": "login", "tid": 2, "source": "consumer dashboard",
                  "sessionid": self.sessionid}
         yield from self.ws.send(json.dumps(login))
-        data = yield from self.ws.recv()
+        yield from self.ws.recv()
 
     @asyncio.coroutine
     def login(self):
+        """Login to waterfurnace system."""
         yield from self.hass.async_add_job(self._get_session_id)
         yield from self._login_ws()
 
     @asyncio.coroutine
     def read(self):
+        """Update the data for the waterfurnace sensors."""
         req = {
             "cmd": "read",
             "tid": 3,
