@@ -261,6 +261,9 @@ class WaterFurnaceData(object):
             self.login()
             _LOGGER.error("Lost our connection, trying again")
             self.data = None
+        except websocket.WebSocketConnectionClosedException as err:
+            _LOGGER.error("Websocket timed out, trying again")
+            self.login()
         except requests.RequestException as err:
             self.login()
             _LOGGER.error("Error fetching Waterfurnace data: %s", repr(err))
