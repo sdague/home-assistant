@@ -26,6 +26,8 @@ DOMAIN = "waterfurnace"
 UPDATE_TOPIC = DOMAIN + "_update"
 CONF_UNIT = "unit"
 SCAN_INTERVAL = timedelta(seconds=10)
+ERROR_INTERVAL = timedelta(seconds=300)
+MAX_FAILS = 10
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -80,6 +82,28 @@ class WaterFurnaceData(threading.Thread):
         self.unit = client.unit
         self.data = None
         self._shutdown = False
+        self._fails = 0
+
+    def _reconnect(self):
+        """Reconnect on a failure."""
+        self._fails += 1
+        if self._fails > MAX_FAILS:
+            _LOGGER.error(
+                "Failed to refresh login credentials. Thread stopped.")
+            self._shutdown = True
+            return
+
+        # sleep first before the reconnect attempt
+        time.sleep(self._fails * ERROR_INTERVAL.seconds)
+
+        try:
+            self.client.login()
+            self.data = self.client.read()
+        except Exception as e:
+            _LOGGER.exception("Failed to reconnect, trying again later.")
+        else:
+            _LOGGER.debug("Reconnected to furnace")
+            self._fails = 0
 
     def run(self):
         """Thread run loop."""
@@ -117,20 +141,7 @@ class WaterFurnaceData(threading.Thread):
                 # that pretty much can all be solved by logging in and
                 # back out again.
                 _LOGGER.exception("Failed to read data, attempting to recover")
-                try:
-                    self.client.login()
-                except Exception:  # pylint: disable=broad-except
-                    # nested exception handling, something really bad
-                    # happened during the login, which means we're not
-                    # in a recoverable state. Stop the thread so we
-                    # don't do just keep poking at the service.
-                    _LOGGER.error(
-                        "Failed to refresh login credentials. Thread stopped.")
-                    return
-                else:
-                    _LOGGER.error(
-                        "Lost our connection to websocket, trying again")
-                    time.sleep(SCAN_INTERVAL.seconds)
+                self._reconnect()
 
             else:
                 self.hass.helpers.dispatcher.dispatcher_send(UPDATE_TOPIC)
