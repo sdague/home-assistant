@@ -28,6 +28,9 @@ CONF_UNIT = "unit"
 SCAN_INTERVAL = timedelta(seconds=10)
 ERROR_INTERVAL = timedelta(seconds=300)
 MAX_FAILS = 10
+NOTIFICATION_ID = 'waterfurnace_website_notification'
+NOTIFICATION_TITLE = 'WaterFurnace website status'
+
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -90,6 +93,12 @@ class WaterFurnaceData(threading.Thread):
         if self._fails > MAX_FAILS:
             _LOGGER.error(
                 "Failed to refresh login credentials. Thread stopped.")
+            self.hass.components.persistent_notification.create(
+                "Error:<br/>Connection to waterfurnace website failed "
+                "the maximum number of times. Thread has stopped.",
+                title=NOTIFICATION_TITLE,
+                notification_id=NOTIFICATION_ID)
+
             self._shutdown = True
             return
 
