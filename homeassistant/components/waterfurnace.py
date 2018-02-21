@@ -18,7 +18,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import discovery
 
-REQUIREMENTS = ["waterfurnace==0.5.0"]
+REQUIREMENTS = ["waterfurnace==0.6.0"]
 
 _LOGGER = logging.getLogger(__name__)
 
