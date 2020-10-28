@@ -16,7 +16,7 @@ DATA_ARWN = "arwn"
 TOPIC = "arwn/#"
 
 
-def discover_sensors(topic, payload):
+def discover_sensors(hass, topic, payload):
     """Given a topic, dynamically create the right sensor type.
 
     Async friendly.
@@ -30,26 +30,26 @@ def discover_sensors(topic, payload):
             unit = TEMP_FAHRENHEIT
         else:
             unit = TEMP_CELSIUS
-        return ArwnSensor(name, "temp", unit)
+        return ArwnSensor(hass, name, "temp", unit)
     if domain == "moisture":
         name = f"{parts[2]} Moisture"
-        return ArwnSensor(name, "moisture", unit, "mdi:water-percent")
+        return ArwnSensor(hass, name, "moisture", unit, "mdi:water-percent")
     if domain == "rain":
         if len(parts) >= 3 and parts[2] == "today":
-            return ArwnSensor(
+            return ArwnSensor(hass,
                 "Rain Since Midnight", "since_midnight", "in", "mdi:water"
             )
         return (
-            ArwnSensor("Total Rainfall", "total", unit, "mdi:water"),
-            ArwnSensor("Rainfall Rate", "rate", unit, "mdi:water"),
+            ArwnSensor(hass, "Total Rainfall", "total", unit, "mdi:water"),
+            ArwnSensor(hass, "Rainfall Rate", "rate", unit, "mdi:water"),
         )
     if domain == "barometer":
-        return ArwnSensor("Barometer", "pressure", unit, "mdi:thermometer-lines")
+        return ArwnSensor(hass, "Barometer", "pressure", unit, "mdi:thermometer-lines")
     if domain == "wind":
         return (
-            ArwnSensor("Wind Speed", "speed", unit, "mdi:speedometer"),
-            ArwnSensor("Wind Gust", "gust", unit, "mdi:speedometer"),
-            ArwnSensor("Wind Direction", "direction", DEGREE, "mdi:compass"),
+            ArwnSensor(hass, "Wind Speed", "speed", unit, "mdi:speedometer"),
+            ArwnSensor(hass, "Wind Gust", "gust", unit, "mdi:speedometer"),
+            ArwnSensor(hass, "Wind Direction", "direction", DEGREE, "mdi:compass"),
         )
 
 
@@ -75,7 +75,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         configuration on our side.
         """
         event = json.loads(msg.payload)
-        sensors = discover_sensors(msg.topic, event)
+        sensors = discover_sensors(hass, msg.topic, event)
         if not sensors:
             return
 
@@ -91,8 +91,11 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
         for sensor in sensors:
             if sensor.name not in store:
-                sensor.hass = hass
-                sensor.set_event(event)
+                _LOGGER.warn(
+                    "Registering new sensor %(sensor)s => %(event)s",
+                    {"sensor": sensor, "event": event},
+                )
+                sensor.set_event(hass, event)
                 store[sensor.name] = sensor
                 _LOGGER.debug(
                     "Registering new sensor %(name)s => %(event)s",
@@ -100,7 +103,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
                 )
                 async_add_entities((sensor,), True)
             else:
-                store[sensor.name].set_event(event)
+                store[sensor.name].set_event(hass, event)
 
     await mqtt.async_subscribe(hass, TOPIC, async_sensor_event_received, 0)
     return True
@@ -109,9 +112,9 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 class ArwnSensor(Entity):
     """Representation of an ARWN sensor."""
 
-    def __init__(self, name, state_key, units, icon=None):
+    def __init__(self, hass, name, state_key, units, icon=None):
         """Initialize the sensor."""
-        self.hass = None
+        self.hass = hass
         self.entity_id = _slug(name)
         self._name = name
         self._state_key = state_key
@@ -119,8 +122,9 @@ class ArwnSensor(Entity):
         self._unit_of_measurement = units
         self._icon = icon
 
-    def set_event(self, event):
+    def set_event(self, hass, event):
         """Update the sensor with the most recent event."""
+        self.hass = hass
         self.event = {}
         self.event.update(event)
         self.async_write_ha_state()
