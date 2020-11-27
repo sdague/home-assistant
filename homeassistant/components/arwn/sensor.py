@@ -131,8 +131,7 @@ class ArwnSensor(Entity):
 
     def set_event(self, event):
         """Update the sensor with the most recent event."""
-        self.event = {}
-        self.event.update(event)
+        self.event = event
         self.async_write_ha_state()
 
     @property
