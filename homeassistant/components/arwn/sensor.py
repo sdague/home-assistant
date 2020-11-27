@@ -95,8 +95,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
         for sensor in sensors:
             if sensor.name not in store:
-                sensor.hass = hass
-                sensor.set_event(event)
+                sensor.set_event(hass, event)
                 store[sensor.name] = sensor
                 _LOGGER.debug(
                     "Registering sensor %(name)s => %(event)s",
@@ -108,7 +107,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
                     "Recording sensor %(name)s => %(event)s",
                     {"name": sensor.name, "event": event},
                 )
-                store[sensor.name].set_event(event)
+                store[sensor.name].set_event(hass, event)
 
     await mqtt.async_subscribe(hass, TOPIC, async_sensor_event_received, 0)
     return True
@@ -129,8 +128,9 @@ class ArwnSensor(Entity):
         self._unit_of_measurement = units
         self._icon = icon
 
-    def set_event(self, event):
+    def set_event(self, hass, event):
         """Update the sensor with the most recent event."""
+        self.hass = hass
         self.event = event
         self.async_write_ha_state()
 
